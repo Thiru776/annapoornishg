@@ -685,7 +685,6 @@
             await synchronizeDatabaseWithUI();
         }
 
-        // Updated Tamil WhatsApp Notice Center Function
         async function renderShareList() {
             const month = document.getElementById('share-month').value;
             const container = document.getElementById('share-list-container'); container.innerHTML = '';
@@ -700,11 +699,11 @@
                 const entry = dbLogs.find(row => row.member_id === m.id) || { savings: 0, principal_paid: 0, interest_paid: 0 };
                 const total = Number(entry.savings) + Number(entry.principal_paid) + Number(entry.interest_paid);
                 
-                // Pure Tamil WhatsApp Text Payload Structure
-                const msg = encodeURIComponent(`📋 *சுய உதவிக் குழு சுருக்கம் (${month})*\n\nவணக்கம் *${m.name}*,\n\n• சேர்க்கப்பட்ட சேமிப்பு: ₹${entry.savings}\n• செலுத்தப்பட்ட அசல்: ₹${entry.principal_paid}\n• செலுத்தப்பட்ட வட்டி: ₹${entry.interest_paid}\n• *மொத்தமாக செலுத்தப்பட்டது:* ₹${total}\n\n*நிலுவைத் தொகை அசல்:* ₹${m.loanBalance || 0}\n\nநன்றி!`);
+                // Keep the exact original phrase structure and insert "உறுப்பினர் எண்" cleanly at the top of information rows
+                const msg = encodeURIComponent(`📋 *சுய உதவிக் குழு சுருக்கம் (${month})*\n\nவணக்கம் *${m.name}*,\nஉறுப்பினர் எண்: ${m.id}\n\n• சேர்க்கப்பட்ட சேமிப்பு: ₹${entry.savings}\n• செலுத்தப்பட்ட அசல்: ₹${entry.principal_paid}\n• செலுத்தப்பட்ட வட்டி: ₹${entry.interest_paid}\n• *மொத்தமாக செலுத்தப்பட்டது:* ₹${total}\n\n*நிலுவைத் தொகை அசல்:* ₹${m.loanBalance || 0}\n\nநன்றி!`);
                 
                 let row = document.createElement('div'); row.className = 'share-row';
-                row.innerHTML = `<div><strong>${m.name}</strong><div style="font-size:0.75rem; color:#222; font-weight:600;">செலுத்தியது: ₹${total} | நிலுவை: ₹${m.loanBalance || 0}</div></div><a href="https://wa.me/${m.phone}?text=${msg}" target="_blank" class="btn-wa">💬 Send Notice</a>`;
+                row.innerHTML = `<div><strong>${m.id}. ${m.name}</strong><div style="font-size:0.75rem; color:#222; font-weight:600;">செலுத்தியது: ₹${total} | நிலுவை: ₹${m.loanBalance || 0}</div></div><a href="https://wa.me/${m.phone}?text=${msg}" target="_blank" class="btn-wa">💬 Send Notice</a>`;
                 container.appendChild(row);
             });
         }
