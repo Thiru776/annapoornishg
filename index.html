@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHG Manager</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --primary: #2e7d32;
+            --secondary: #1565c0;
+            --danger: #c62828;
+            --text: #000000;
+            --border: rgba(0, 0, 0, 0.15);
+            --card-bg: rgba(255, 255, 255, 0.90);
+            --header-bg: rgba(255, 255, 255, 0.95);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        
+        body { 
+            color: var(--text); 
+            background-image: url('Screenshot 2026-06-28 140223.jpg');
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding-bottom: 90px; 
+        }
+
+        header { 
+            background: var(--header-bg); 
+            color: #000; 
+            padding: 12px 20px; 
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky; 
+            top: 10px; 
+            z-index: 100; 
+            margin: 10px auto;
+            max-width: 95%;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.6);
+        }
+
+        .menu-icon { font-size: 1.6rem; cursor: pointer; color: #111; padding: 0 5px; }
+        .header-title { font-size: 1.4rem; font-weight: bold; text-align: center; flex-grow: 1; margin-right: 20px; }
+        
+        /* Slide-out Sidebar Drawer Styling */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -280px;
+            width: 280px;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            box-shadow: 4px 0 20px rgba(0,0,0,0.2);
+            z-index: 2000;
+            transition: left 0.3s ease;
+            padding: 20px;
+            border-right: 1px solid rgba(255,255,255,0.4);
+        }
+        .sidebar.open { left: 0; }
+        .sidebar-header { border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-bottom: 20px; }
+        .sidebar-title-wrapper { display: flex; justify-content: space-between; align-items: center; }
+        .sidebar-title { font-weight: bold; color: var(--primary); font-size: 1.1rem; }
+        .sidebar-subtitle { font-size: 0.8rem; color: #666; font-weight: 600; margin-top: 4px; }
+        .close-btn { font-size: 1.5rem; cursor: pointer; color: #555; }
+        .menu-item { padding: 12px 15px; margin-bottom: 8px; border-radius: 8px; font-weight: bold; color: #222; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 10px; }
+        .menu-item:hover { background: rgba(46, 125, 50, 0.15); color: var(--primary); }
+        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); z-index: 1999; display: none; backdrop-filter: blur(2px); }
+
+        .total-display-wrapper { display: grid; grid-template-columns: 1fr; gap: 15px; padding: 15px 5px; }
+        .total-box-card { background: linear-gradient(135deg, #ffffff, #f1f8e9); border-radius: 16px; padding: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.06); border: 1px solid rgba(46, 125, 50, 0.15); }
+        .total-label { font-size: 0.95rem; color: #555; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .total-number { font-size: 1.8rem; font-weight: 800; color: var(--primary); margin-top: 6px; }
+        .total-number.blue { color: var(--secondary); }
+        .total-number.red { color: var(--danger); }
+        .total-number.grand { color: #2e7d32; font-size: 2.2rem; border-top: 2px dashed rgba(0,0,0,0.1); margin-top: 10px; padding-top: 10px; }
+
+        .container { max-width: 95%; margin: 15px auto; padding: 0; }
+        
+        .card { 
+            background: var(--card-bg); 
+            padding: 20px; 
+            margin-bottom: 20px; 
+            border-radius: 16px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12); 
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        
+        .section-title { font-size: 1.3rem; font-weight: bold; text-align: center; margin-bottom: 15px; color: #111; }
+        select, input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; background: white; font-weight: 600; color: #000; }
+        input[type="month"], input[type="number"].inline-input { width: auto; }
+
+        .month-bar { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+        .freeze-notice { text-align: center; color: var(--danger); font-weight: bold; margin-bottom: 10px; display: none; font-size: 0.95rem; }
+
+        #bank-interest-container { display: none; border-top: 1px dashed rgba(0,0,0,0.1); padding-top: 10px; width: 100%; justify-content: center; align-items: center; gap: 15px; }
+
+        .grid-matrix { width: 100%; border-collapse: collapse; margin-top: 5px; background: rgba(255,255,255,0.6); border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .grid-matrix th, .grid-matrix td { padding: 10px 8px; border: 1px solid rgba(0,0,0,0.12); text-align: center; vertical-align: middle; }
+        .grid-matrix th { background: rgba(0, 0, 0, 0.08); font-weight: bold; color: #000; font-size: 0.9rem; }
+        .grid-matrix td { background: rgba(255, 255, 255, 0.75); font-weight: 600; color: #000; font-size: 0.95rem; }
+        .grid-matrix tbody tr:hover td { background: rgba(255, 255, 255, 0.9); }
+        .grid-matrix td:nth-child(2) { text-align: left; font-weight: bold; }
+        
+        .grid-matrix input[type="number"], .month-bar input[type="number"] { 
+            background: rgba(255, 255, 255, 0.95); 
+            border: 1px solid rgba(0,0,0,0.2); 
+            text-align: right; 
+            padding: 6px;
+            border-radius: 6px;
+            font-weight: 600;
+            width: 100%;
+            color: #000;
+        }
+        .grid-matrix input[type="number"]::-webkit-inner-spin-button, 
+        .grid-matrix input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input:disabled { background: rgba(0, 0, 0, 0.06) !important; color: #444 !important; border: 1px solid rgba(0,0,0,0.1); cursor: not-allowed; }
+
+        .grand-total-row td { background: rgba(0, 0, 0, 0.06) !important; font-weight: bold !important; color: #000 !important; font-size: 1rem !important; }
+
+        .monthly-total-text { font-weight: bold; color: var(--secondary); text-align: right; padding-right: 10px; }
+        .btn-wa { background: #25D366; color: white; font-size: 0.85rem; padding: 8px 12px; border-radius: 6px; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn-wa:hover { background: #128C7E; }
+
+        .nav-tabs { 
+            position: fixed; 
+            bottom: 15px; 
+            left: 0; 
+            right: 0; 
+            margin: 0 auto;
+            max-width: 650px;
+            background: rgba(255, 255, 255, 0.5); 
+            display: flex; 
+            gap: 10px;
+            padding: 10px;
+            border-radius: 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2); 
+            z-index: 1000; 
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.4);
+        }
+        .tab { 
+            flex: 1; 
+            text-align: center; 
+            padding: 12px 5px; 
+            font-size: 0.9rem; 
+            color: #111; 
+            cursor: pointer; 
+            font-weight: bold; 
+            border-radius: 20px;
+            background: rgba(255,255,255,0.6);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .tab.active { color: #000; background: rgba(255, 255, 255, 0.95); box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+        .tab-save { background: rgba(46, 125, 50, 0.85); color: #fff; flex: 0.6; }
+        .tab-save:hover { background: rgba(46, 125, 50, 0.95); }
+
+        .page { display: none; }
+        .page.active { display: block; }
+        .share-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 10px; border-bottom: 1px solid rgba(0,0,0,0.1); background: rgba(255,255,255,0.5); margin-bottom: 5px; border-radius: 8px; }
+        .view-span { font-size: 0.75rem; color: #cc1111; font-weight: bold; display: block; margin-top: 2px; }
+
+        @media (min-width: 600px) {
+            .total-display-wrapper { grid-template-columns: 1fr 1fr; }
+            .total-box-card.full-width { grid-column: span 2; }
+        }
+
+        @media (max-width: 768px) {
+            .grid-matrix th, .grid-matrix td { padding: 8px 3px; font-size: 0.78rem; }
+            .grid-matrix input[type="number"] { padding: 4px !important; font-size: 0.78rem; }
+            .nav-tabs { padding: 6px; gap: 4px; bottom: 10px; max-width: 95%; }
+            .tab { font-size: 0.72rem; padding: 10px 2px; border-radius: 15px; }
+            header { padding: 10px; margin: 5px auto; }
+            .header-title { font-size: 1.1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar-overlay" id="menu-overlay" onclick="toggleSidebarDrawer(false)"></div>
+    <div class="sidebar" id="sidebar-drawer">
+        <div class="sidebar-header">
+            <div class="sidebar-title-wrapper">
+                <div class="sidebar-title">Main Navigation</div>
+                <div class="close-btn" onclick="toggleSidebarDrawer(false)">✕</div>
+            </div>
+            <div class="sidebar-subtitle">Started at April 2023</div>
+        </div>
+        <div class="menu-item" onclick="switchTab('register', null); toggleSidebarDrawer(false);">📅 Monthly Log Matrix</div>
+        <div class="menu-item" onclick="switchTab('members', null); toggleSidebarDrawer(false);">👤 Group Members Directory</div>
+        <div class="menu-item" onclick="switchTab('total-amount', null); toggleSidebarDrawer(false);">📈 Total Group Capital View</div>
+    </div>
+
+    <header>
+        <div class="menu-icon" onclick="toggleSidebarDrawer(true)">☰</div>
+        <div class="header-title">ஸ்ரீ அன்னபூரணி மகளிர் குழு</div>
+    </header>
+
+    <div class="container">
+        <div id="page-total-amount" class="page">
+            <div class="card">
+                <div class="section-title">📊 Total Group Capital Ledger Overview</div>
+                <div class="total-display-wrapper">
+                    <div class="total-box-card">
+                        <div class="total-label">Total Savings Collected</div>
+                        <div class="total-number" id="db-total-savings-sum">₹0</div>
+                    </div>
+                    <div class="total-box-card">
+                        <div class="total-label">Total Interest Collected</div>
+                        <div class="total-number blue" id="db-total-interest-sum">₹0</div>
+                    </div>
+                    <div class="total-box-card">
+                        <div class="total-label">Total Bank Financial Interest</div>
+                        <div class="total-number blue" id="db-total-bank-interest-sum" style="color: #6a1b9a;">₹0</div>
+                    </div>
+                    <div class="total-box-card">
+                        <div class="total-label">Outstanding Loans Balance</div>
+                        <div class="total-number red" id="db-total-outstanding-sum">₹0</div>
+                    </div>
+                    <div class="total-box-card">
+                        <div class="total-label">Current Cash Balance Pool</div>
+                        <div class="total-number" id="db-total-current-cash">₹0</div>
+                    </div>
+                    <div class="total-box-card full-width" style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9);">
+                        <div class="total-label" style="color: #1b5e20;">Total Unified Group Capital Pool</div>
+                        <div class="total-number grand" id="db-total-grand-pool">₹0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-register" class="page active">
+            <div class="card" style="padding: 12px;">
+                <div class="section-title">📅 Monthly Ledger Records</div>
+                <div class="month-bar">
+                    <label style="font-weight:600; color:#000;">Select Meeting Month:</label>
+                    <input type="month" id="register-month" onchange="loadMonthlyData()">
+                </div>
+                
+                <div id="bank-interest-container" class="month-bar">
+                    <label style="font-weight:600; color: #1565c0;">Bank Financial Interest (₹):</label>
+                    <input type="number" id="register-bank-interest" class="inline-input" value="0" style="max-width: 150px; font-weight: bold; text-align: right;">
+                </div>
+                
+                <div class="freeze-notice" id="register-freeze-msg">⚠️ No edit option allowed for this month period</div>
+
+                <div style="overflow-x: auto;">
+                    <table class="grid-matrix">
+                        <thead>
+                            <tr>
+                                <th style="width: 5%;">ID</th>
+                                <th style="width: 28%;">Name</th>
+                                <th>Savings (₹)</th>
+                                <th>Principal Entry (₹)</th>
+                                <th>Interest Entry (₹)</th>
+                                <th style="width: 18%;">Row Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="register-rows-container"></tbody>
+                        <tfoot>
+                            <tr class="grand-total-row">
+                                <td>-</td>
+                                <td>TOTAL</td>
+                                <td id="col-total-savings">₹0</td>
+                                <td id="col-total-principal">₹0</td>
+                                <td id="col-total-interest">₹0</td>
+                                <td id="col-total-grand" style="color: var(--secondary) !important; text-align: right; padding-right: 10px;">₹0</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-members" class="page">
+            <div class="card" style="overflow-x: auto;">
+                <div class="section-title">👥 Group Registry Directory (View Mode)</div>
+                <table class="grid-matrix">
+                    <thead>
+                        <tr>
+                            <th style="width: 10%;">Slot ID</th>
+                            <th>Member Name</th>
+                            <th>Aadhaar Number</th>
+                            <th>Mobile Link</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-members-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="page-loans" class="page">
+            <div class="card" style="padding: 12px;">
+                <div class="section-title">💰 Loan Master Ledger</div>
+                <div class="month-bar">
+                    <label style="font-weight:600; color:#000;">Select Target Month:</label>
+                    <input type="month" id="loan-master-month" onchange="loadLoanMasterData()">
+                </div>
+
+                <div style="overflow-x: auto;">
+                    <table class="grid-matrix">
+                        <thead>
+                            <tr>
+                                <th style="width: 5%;">ID</th>
+                                <th style="width: 30%;">Member Name</th>
+                                <th>New Loan Amount Issued (₹)</th>
+                                <th>Monthly Interest Rate (%)</th>
+                                <th style="width: 25%; text-align: right; padding-right: 15px;">Current Outstanding Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-loans-body"></tbody>
+                        <tfoot>
+                            <tr class="grand-total-row">
+                                <td>-</td>
+                                <td>TOTAL</td>
+                                <td id="col-total-new-loans">₹0</td>
+                                <td>-</td>
+                                <td id="col-total-outstanding-loans" style="color: var(--danger) !important; text-align: right; padding-right: 15px;">₹0</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-share" class="page">
+            <div class="card">
+                <div class="section-title">💬 Share Statements via WhatsApp</div>
+                <div class="month-bar">
+                    <strong style="color: var(--secondary);">Review Month:</strong>
+                    <input type="month" id="share-month" onchange="renderShareList()">
+                </div>
+                <div id="share-list-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="nav-tabs">
+        <div class="tab active" id="tab-btn-register" onclick="switchTab('register', this)">📅 Monthly Log</div>
+        <div class="tab" id="tab-btn-loans" onclick="switchTab('loans', this)">💰 Loan Master</div>
+        <div class="tab" id="tab-btn-share" onclick="switchTab('share', this)">💬 WhatsApp Out</div>
+        <div class="tab tab-save" id="footer-save-btn" onclick="triggerPageContextSave()">Save</div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://vcukxlzgqztfnmrunpdy.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjdWt4bHpncXp0Zm5tcnVucGR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2Mjk1MjksImV4cCI6MjA5ODIwNTUyOX0.I56vBAtGdlp70ijT91FMaza5JerY_zVgh_IX6rs657w";
+        
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const baseSlots = Array.from({ length: 14 }, (_, i) => ({
+            id: i + 1, name: `Slot Member ${i + 1}`, phone: "", aadhaar: "", loanBalance: 0, interestRate: 1.0
+        }));
+
+        let appData = { members: [...baseSlots], monthlyLogs: {} };
+
+        window.onload = async function() {
+            const today = new Date();
+            const currentMonthStr = today.toISOString().substring(0, 7);
+            document.getElementById('register-month').value = currentMonthStr;
+            document.getElementById('share-month').value = currentMonthStr;
+            document.getElementById('loan-master-month').value = currentMonthStr;
+
+            await synchronizeDatabaseWithUI();
+        };
+
+        function toggleSidebarDrawer(open) {
+            const sidebar = document.getElementById('sidebar-drawer');
+            const overlay = document.getElementById('menu-overlay');
+            if (open) {
+                sidebar.classList.add('open');
+                overlay.style.display = "block";
+            } else {
+                sidebar.classList.remove('open');
+                overlay.style.display = "none";
+            }
+        }
+
+        function isPeriodEditable(targetYearMonth) {
+            const systemDate = new Date();
+            const currentYearMonth = systemDate.toISOString().substring(0, 7);
+            systemDate.setMonth(systemDate.getMonth() + 1);
+            const nextYearMonth = systemDate.toISOString().substring(0, 7);
+            return (targetYearMonth === currentYearMonth || targetYearMonth === nextYearMonth);
+        }
+
+        async function fetchCumulativePoolMetrics() {
+            try {
+                const { data: allLogs, error: errLogs } = await _supabase.from('monthly_logs').select('savings, interest_paid, principal_paid');
+                let cumulativeSavings = 0; let cumulativeInterest = 0; let cumulativePrincipalPaid = 0;
+
+                if (!errLogs && allLogs) {
+                    allLogs.forEach(row => {
+                        cumulativeSavings += Number(row.savings) || 0;
+                        cumulativeInterest += Number(row.interest_paid) || 0;
+                        cumulativePrincipalPaid += Number(row.principal_paid) || 0;
+                    });
+                }
+
+                const { data: bankLogs, error: errBank } = await _supabase.from('external_income').select('bank_interest');
+                let cumulativeBankInterest = 0;
+                if (!errBank && bankLogs) {
+                    bankLogs.forEach(row => {
+                        cumulativeBankInterest += Number(row.bank_interest) || 0;
+                    });
+                }
+
+                let totalOutstandingLoans = 0;
+                appData.members.forEach(m => {
+                    totalOutstandingLoans += m.loanBalance;
+                });
+
+                let currentCashInHand = (cumulativeSavings + cumulativeInterest + cumulativePrincipalPaid + cumulativeBankInterest) - (totalOutstandingLoans + cumulativePrincipalPaid);
+                if (currentCashInHand < 0) currentCashInHand = 0; 
+
+                document.getElementById('db-total-savings-sum').textContent = `₹${cumulativeSavings}`;
+                document.getElementById('db-total-interest-sum').textContent = `₹${cumulativeInterest}`;
+                document.getElementById('db-total-bank-interest-sum').textContent = `₹${cumulativeBankInterest}`;
+                document.getElementById('db-total-outstanding-sum').textContent = `₹${totalOutstandingLoans}`;
+                document.getElementById('db-total-current-cash').textContent = `₹${currentCashInHand}`;
+                document.getElementById('db-total-grand-pool').textContent = `₹${cumulativeSavings + cumulativeInterest + cumulativeBankInterest}`;
+                
+            } catch (err) {
+                console.error("Aggregation calculation issue:", err);
+            }
+        }
+
+        async function synchronizeDatabaseWithUI() {
+            try {
+                const { data: dbMembers, error: memErr } = await _supabase.from('members').select('*').order('id', { ascending: true });
+                if (!memErr && dbMembers && dbMembers.length > 0) {
+                    dbMembers.forEach(dbm => {
+                        const target = appData.members.find(m => m.id === dbm.id);
+                        if (target) {
+                            target.name = dbm.name || `Slot Member ${dbm.id}`;
+                            target.phone = dbm.phone || "";
+                            target.aadhaar = dbm.aadhaar || "";
+                        }
+                    });
+                }
+
+                const { data: dbLoans, error: loanErr } = await _supabase.from('loans').select('*');
+                if (!loanErr && dbLoans) {
+                    dbLoans.forEach(dbl => {
+                        const target = appData.members.find(m => m.id === dbl.member_id);
+                        if (target) {
+                            target.loanBalance = Number(dbl.loan_balance) || 0;
+                            target.interestRate = Number(dbl.interest_rate) || 1.0;
+                        }
+                    });
+                }
+
+                refreshMemberTableView();
+                await loadLoanMasterData();
+                await loadMonthlyData();
+                await fetchCumulativePoolMetrics();
+            } catch (e) {
+                console.error("Database sync error:", e);
+            }
+        }
+
+        function switchTab(pageId, tabEl) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            
+            document.getElementById(`page-${pageId}`).classList.add('active');
+            if (tabEl) {
+                tabEl.classList.add('active');
+            } else {
+                const syncTabBtn = document.getElementById(`tab-btn-${pageId}`);
+                if (syncTabBtn) syncTabBtn.classList.add('active');
+            }
+            
+            const saveBtn = document.getElementById('footer-save-btn');
+            if (pageId === 'register' || pageId === 'loans') {
+                saveBtn.style.display = "flex";
+            } else {
+                saveBtn.style.display = "none";
+            }
+            
+            if(pageId === 'members') refreshMemberTableView();
+            if(pageId === 'loans') loadLoanMasterData();
+            if(pageId === 'register') loadMonthlyData();
+            if(pageId === 'share') renderShareList();
+            if(pageId === 'total-amount') fetchCumulativePoolMetrics();
+        }
+
+        function refreshMemberTableView() {
+            const tbody = document.getElementById('table-members-body'); tbody.innerHTML = '';
+            appData.members.forEach(m => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${m.id}</strong></td><td><strong>${m.name}</strong></td><td>${m.aadhaar || '-'}</td><td>${m.phone || '-'}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function recalculateLoanMasterTotals() {
+            let totalNewLoans = 0; let totalOutstanding = 0;
+            appData.members.forEach(m => {
+                const newLoan = parseFloat(document.getElementById(`l-amt-${m.id}`).value) || 0;
+                totalNewLoans += newLoan; totalOutstanding += m.loanBalance;
+            });
+            document.getElementById('col-total-new-loans').textContent = `₹${totalNewLoans}`;
+            document.getElementById('col-total-outstanding-loans').textContent = `₹${totalOutstanding}`;
+        }
+
+        async function loadLoanMasterData() {
+            const tbody = document.getElementById('table-loans-body'); tbody.innerHTML = '';
+            appData.members.forEach(m => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${m.id}</strong></td>
+                    <td><strong>${m.name}</strong></td>
+                    <td><input type="number" id="l-amt-${m.id}" value="${m.loanBalance}" disabled oninput="recalculateLoanMasterTotals()"></td>
+                    <td><input type="number" id="l-rate-${m.id}" value="${m.interestRate}" step="0.1"></td>
+                    <td style="text-align:right; padding-right:15px; font-weight:bold; color:var(--danger);">₹${m.loanBalance}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            recalculateLoanMasterTotals();
+        }
+
+        async function saveLoanMasterProfile() {
+            let saveErrors = 0;
+            for (const m of appData.members) {
+                const rate = parseFloat(document.getElementById(`l-rate-${m.id}`).value) || 1;
+                
+                const { error } = await _supabase.from('loans').upsert({
+                    member_id: m.id, loan_balance: m.loanBalance, interest_rate: rate
+                }, { onConflict: 'member_id' });
+                if(error) saveErrors++;
+            }
+            if(saveErrors > 0) alert("Some entries failed to synchronize.");
+            else alert("Loan interest rate criteria verified!");
+            await synchronizeDatabaseWithUI();
+        }
+
+        function recalculateTableGridTotals() {
+            let totalSavings = 0; let totalPrincipal = 0; let totalInterest = 0; let totalGrand = 0;
+
+            appData.members.forEach(m => {
+                const s = parseFloat(document.getElementById(`s-in-${m.id}`).value) || 0;
+                const p = parseFloat(document.getElementById(`p-in-${m.id}`).value) || 0;
+                const i = parseFloat(document.getElementById(`i-in-${m.id}`).value) || 0;
+                
+                const rowTotal = s + p + i;
+                document.getElementById(`total-val-${m.id}`).textContent = `₹${rowTotal}`;
+
+                totalSavings += s; totalPrincipal += p; totalInterest += i; totalGrand += rowTotal;
+            });
+
+            document.getElementById('col-total-savings').textContent = `₹${totalSavings}`;
+            document.getElementById('col-total-principal').textContent = `₹${totalPrincipal}`;
+            document.getElementById('col-total-interest').textContent = `₹${totalInterest}`;
+            document.getElementById('col-total-grand').textContent = `₹${totalGrand}`;
+        }
+
+        async function loadMonthlyData() {
+            const month = document.getElementById('register-month').value;
+            const container = document.getElementById('register-rows-container'); container.innerHTML = '';
+            
+            const isEditable = isPeriodEditable(month);
+            const freezeNotice = document.getElementById('register-freeze-msg');
+            const interestBox = document.getElementById('bank-interest-container');
+            const interestInputEl = document.getElementById('register-bank-interest');
+            
+            const selectedMonthDigit = month ? month.split('-')[1] : "";
+            const matchesTargetMonths = ["04", "05", "06", "07"].includes(selectedMonthDigit);
+
+            if (matchesTargetMonths) {
+                interestBox.style.display = "flex";
+            } else {
+                interestBox.style.display = "none";
+            }
+
+            if (!isEditable) {
+                freezeNotice.style.display = "block";
+                interestInputEl.disabled = true;
+            } else {
+                freezeNotice.style.display = "none";
+                interestInputEl.disabled = false;
+            }
+
+            const { data: bankData } = await _supabase.from('external_income').select('bank_interest').eq('target_month', month).single();
+            interestInputEl.value = bankData ? bankData.bank_interest : 0;
+
+            const { data: dbLogs } = await _supabase.from('monthly_logs').select('*').eq('target_month', month);
+            const monthlyMapped = {};
+            if(dbLogs) {
+                dbLogs.forEach(row => { monthlyMapped[row.member_id] = row; });
+            }
+            appData.monthlyLogs[month] = monthlyMapped;
+
+            appData.members.forEach(m => {
+                const existingData = monthlyMapped[m.id] || {};
+                let suggestedInterest = 0;
+                if (!existingData.hasOwnProperty('interest_paid') && m.loanBalance > 0) {
+                    suggestedInterest = Math.round(m.loanBalance * ((m.interestRate || 1) / 100));
+                }
+                const s = existingData.hasOwnProperty('savings') ? existingData.savings : 500;
+                const p = existingData.principal_paid || 0;
+                const i = existingData.hasOwnProperty('interest_paid') ? existingData.interest_paid : suggestedInterest;
+
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${m.id}</td>
+                    <td><strong>${m.name}</strong><span class="view-span">Bal: ₹${m.loanBalance || 0}</span></td>
+                    <td><input type="number" id="s-in-${m.id}" value="${s}" oninput="recalculateTableGridTotals()" ${!isEditable ? 'disabled' : ''}></td>
+                    <td><input type="number" id="p-in-${m.id}" value="${p}" oninput="recalculateTableGridTotals()" ${!isEditable ? 'disabled' : ''}></td>
+                    <td><input type="number" id="i-in-${m.id}" value="${i}" oninput="recalculateTableGridTotals()" ${!isEditable ? 'disabled' : ''}></td>
+                    <td class="monthly-total-text" id="total-val-${m.id}">₹0</td>
+                `;
+                container.appendChild(tr);
+            });
+            recalculateTableGridTotals();
+        }
+
+        function triggerPageContextSave() {
+            const activePage = document.querySelector('.page.active').id;
+            if (activePage === 'page-register') {
+                saveMonthlyLogData();
+            } else if (activePage === 'page-loans') {
+                saveLoanMasterProfile();
+            }
+        }
+
+        async function saveMonthlyLogData() {
+            const month = document.getElementById('register-month').value;
+            if(!month) return alert("Select target month period context first.");
+
+            if(!isPeriodEditable(month)) {
+                alert("No edit option allowed");
+                return;
+            }
+
+            const oldMonthRecord = appData.monthlyLogs[month] || {};
+            let saveErrors = 0;
+
+            const selectedMonthDigit = month.split('-')[1];
+            const matchesTargetMonths = ["04", "05", "06", "07"].includes(selectedMonthDigit);
+            const interestVal = matchesTargetMonths ? (parseFloat(document.getElementById('register-bank-interest').value) || 0) : 0;
+            
+            await _supabase.from('external_income').upsert({
+                target_month: month, bank_interest: interestVal
+            }, { onConflict: 'target_month' });
+
+            for (const m of appData.members) {
+                const sVal = parseFloat(document.getElementById(`s-in-${m.id}`).value) || 0;
+                const pVal = parseFloat(document.getElementById(`p-in-${m.id}`).value) || 0;
+                const iVal = parseFloat(document.getElementById(`i-in-${m.id}`).value) || 0;
+
+                let calculatedBalance = m.loanBalance;
+                if (oldMonthRecord[m.id]) {
+                    calculatedBalance += (Number(oldMonthRecord[m.id].principal_paid) || 0);
+                }
+                calculatedBalance = Math.max(0, calculatedBalance - pVal);
+
+                await _supabase.from('loans').upsert({
+                    member_id: m.id, loan_balance: calculatedBalance, interest_rate: m.interestRate
+                }, { onConflict: 'member_id' });
+
+                const { error } = await _supabase.from('monthly_logs').upsert({
+                    member_id: m.id, target_month: month, savings: sVal, principal_paid: pVal, interest_paid: iVal
+                }, { onConflict: 'member_id,target_month' });
+
+                if (error) saveErrors++;
+            }
+
+            if(saveErrors > 0) alert("Database storage synchronization issues encountered.");
+            else alert("Monthly records compiled and outstanding balances calculated!");
+            await synchronizeDatabaseWithUI();
+        }
+
+        // Updated Tamil WhatsApp Notice Center Function
+        async function renderShareList() {
+            const month = document.getElementById('share-month').value;
+            const container = document.getElementById('share-list-container'); container.innerHTML = '';
+            
+            const { data: dbLogs } = await _supabase.from('monthly_logs').select('*').eq('target_month', month);
+            if(!dbLogs || dbLogs.length === 0) {
+                container.innerHTML = `<p style="color:#000; text-align:center; font-weight:bold; padding:20px;">இந்த மாதத்திற்கான பரிவர்த்தனை பதிவுகள் எதுவும் இல்லை.</p>`;
+                return;
+            }
+
+            appData.members.forEach(m => {
+                const entry = dbLogs.find(row => row.member_id === m.id) || { savings: 0, principal_paid: 0, interest_paid: 0 };
+                const total = Number(entry.savings) + Number(entry.principal_paid) + Number(entry.interest_paid);
+                
+                // Pure Tamil WhatsApp Text Payload Structure
+                const msg = encodeURIComponent(`📋 *சுய உதவிக் குழு சுருக்கம் (${month})*\n\nவணக்கம் *${m.name}*,\n\n• சேர்க்கப்பட்ட சேமிப்பு: ₹${entry.savings}\n• செலுத்தப்பட்ட அசல்: ₹${entry.principal_paid}\n• செலுத்தப்பட்ட வட்டி: ₹${entry.interest_paid}\n• *மொத்தமாக செலுத்தப்பட்டது:* ₹${total}\n\n*நிலுவைத் தொகை அசல்:* ₹${m.loanBalance || 0}\n\nநன்றி!`);
+                
+                let row = document.createElement('div'); row.className = 'share-row';
+                row.innerHTML = `<div><strong>${m.name}</strong><div style="font-size:0.75rem; color:#222; font-weight:600;">செலுத்தியது: ₹${total} | நிலுவை: ₹${m.loanBalance || 0}</div></div><a href="https://wa.me/${m.phone}?text=${msg}" target="_blank" class="btn-wa">💬 Send Notice</a>`;
+                container.appendChild(row);
+            });
+        }
+    </script>
+</body>
+</html>
