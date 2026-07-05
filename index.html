@@ -368,6 +368,9 @@
 
         let appData = { members: [...baseSlots], monthlyLogs: {} };
 
+        // Track edited member IDs cleanly
+        let editedMemberIds = new Set();
+
         window.onload = async function() {
             const today = new Date();
             const currentMonthStr = today.toISOString().substring(0, 7);
@@ -508,6 +511,11 @@
             });
         }
 
+        function markAsEdited(memberId) {
+            editedMemberIds.add(Number(memberId));
+            recalculateTableGridTotals();
+        }
+
         function recalculateLoanMasterTotals() {
             let totalNewLoans = 0; let totalOutstanding = 0;
             appData.members.forEach(m => {
@@ -526,7 +534,7 @@
                     <td><strong>${m.id}</strong></td>
                     <td><strong>${m.name}</strong></td>
                     <td><input type="number" id="l-amt-${m.id}" value="${m.loanBalance}" disabled oninput="recalculateLoanMasterTotals()"></td>
-                    <td><input type="number" id="l-rate-${m.id}" value="${m.interestRate}" step="0.1"></td>
+                    <td><input type="number" id="l-rate-${m.id}" value="${m.interestRate}" step="0.1" oninput="editedMemberIds.add(${m.id})"></td>
                     <td style="text-align:right; padding-right:15px; font-weight:bold; color:var(--danger);">₹${m.loanBalance}</td>
                 `;
                 tbody.appendChild(tr);
@@ -536,7 +544,13 @@
 
         async function saveLoanMasterProfile() {
             let saveErrors = 0;
+            if (editedMemberIds.size === 0) {
+                alert("No changes recognized to execute.");
+                return;
+            }
             for (const m of appData.members) {
+                if (!editedMemberIds.has(m.id)) continue;
+
                 const rate = parseFloat(document.getElementById(`l-rate-${m.id}`).value) || 1;
                 
                 const { error } = await _supabase.from('loans').upsert({
@@ -546,6 +560,8 @@
             }
             if(saveErrors > 0) alert("Some entries failed to synchronize.");
             else alert("Loan interest rate criteria verified!");
+            
+            editedMemberIds.clear();
             await synchronizeDatabaseWithUI();
         }
 
@@ -573,6 +589,9 @@
             const month = document.getElementById('register-month').value;
             const container = document.getElementById('register-rows-container'); container.innerHTML = '';
             
+            // Clear modifications on track shift
+            editedMemberIds.clear();
+
             const isEditable = isPeriodEditable(month);
             const freezeNotice = document.getElementById('register-freeze-msg');
             const interestBox = document.getElementById('bank-interest-container');
@@ -619,9 +638,9 @@
                 tr.innerHTML = `
                     <td>${m.id}</td>
                     <td><strong>${m.name}</strong><span class="view-span">Bal: ₹${m.loanBalance || 0}</span></td>
-                    <td><input type="number" id="s-in-${m.id}" value="${s}" oninput="recalculateTableGridTotals()" ${!isEditable ? 'disabled' : ''}></td>
-                    <td><input type="number" id="p-in-${m.id}" value="${p}" oninput="recalculateTableGridTotals()" ${!isEditable ? 'disabled' : ''}></td>
-                    <td><input type="number" id="i-in-${m.id}" value="${i}" oninput="recalculateTableGridTotals()" ${!isEditable ? 'disabled' : ''}></td>
+                    <td><input type="number" id="s-in-${m.id}" value="${s}" oninput="markAsEdited(${m.id})" ${!isEditable ? 'disabled' : ''}></td>
+                    <td><input type="number" id="p-in-${m.id}" value="${p}" oninput="markAsEdited(${m.id})" ${!isEditable ? 'disabled' : ''}></td>
+                    <td><input type="number" id="i-in-${m.id}" value="${i}" oninput="markAsEdited(${m.id})" ${!isEditable ? 'disabled' : ''}></td>
                     <td class="monthly-total-text" id="total-val-${m.id}">₹0</td>
                 `;
                 container.appendChild(tr);
@@ -647,6 +666,11 @@
                 return;
             }
 
+            if(editedMemberIds.size === 0) {
+                alert("No profile records were edited.");
+                return;
+            }
+
             const oldMonthRecord = appData.monthlyLogs[month] || {};
             let saveErrors = 0;
 
@@ -659,6 +683,9 @@
             }, { onConflict: 'target_month' });
 
             for (const m of appData.members) {
+                // Strict boundary validation: Skip any member data not deliberately edited
+                if (!editedMemberIds.has(m.id)) continue;
+
                 const sVal = parseFloat(document.getElementById(`s-in-${m.id}`).value) || 0;
                 const pVal = parseFloat(document.getElementById(`p-in-${m.id}`).value) || 0;
                 const iVal = parseFloat(document.getElementById(`i-in-${m.id}`).value) || 0;
@@ -682,6 +709,8 @@
 
             if(saveErrors > 0) alert("Database storage synchronization issues encountered.");
             else alert("Monthly records compiled and outstanding balances calculated!");
+            
+            editedMemberIds.clear();
             await synchronizeDatabaseWithUI();
         }
 
@@ -699,8 +728,19 @@
                 const entry = dbLogs.find(row => row.member_id === m.id) || { savings: 0, principal_paid: 0, interest_paid: 0 };
                 const total = Number(entry.savings) + Number(entry.principal_paid) + Number(entry.interest_paid);
                 
-                // Keep the exact original phrase structure and insert "உறுப்பினர் எண்" cleanly at the top of information rows
-                const msg = encodeURIComponent(`📋 *சுய உதவிக் குழு சுருக்கம் (${month})*\n\nவணக்கம் *${m.name}*,\nஉறுப்பினர் எண்: ${m.id}\n\n• சேர்க்கப்பட்ட சேமிப்பு: ₹${entry.savings}\n• செலுத்தப்பட்ட அசல்: ₹${entry.principal_paid}\n• செலுத்தப்பட்ட வட்டி: ₹${entry.interest_paid}\n• *மொத்தமாக செலுத்தப்பட்டது:* ₹${total}\n\n*நிலுவைத் தொகை அசல்:* ₹${m.loanBalance || 0}\n\nநன்றி!`);
+                const msg = encodeURIComponent(`📋 *சுய உதவிக் குழு சுருக்கம் (${month})*
+
+வணக்கம் *${m.name}*,
+உறுப்பினர் எண்: ${m.id}
+
+• சேர்க்கப்பட்ட சேமிப்பு: ₹${entry.savings}
+• செலுத்தப்பட்ட அசல்: ₹${entry.principal_paid}
+• செலுத்தப்பட்ட வட்டி: ₹${entry.interest_paid}
+• *மொத்தமாக செலுத்தப்பட்டது:* ₹${total}
+
+*நிலுவைத் தொகை அசல்:* ₹${m.loanBalance || 0}
+
+நன்றி!`);
                 
                 let row = document.createElement('div'); row.className = 'share-row';
                 row.innerHTML = `<div><strong>${m.id}. ${m.name}</strong><div style="font-size:0.75rem; color:#222; font-weight:600;">செலுத்தியது: ₹${total} | நிலுவை: ₹${m.loanBalance || 0}</div></div><a href="https://wa.me/${m.phone}?text=${msg}" target="_blank" class="btn-wa">💬 Send Notice</a>`;
